@@ -2,17 +2,23 @@ import { handlePDFIntercept } from '../content/handlers/interceptorHandlers/hand
 import { handlePDFSave } from '../content/handlers/interceptorHandlers/handlePDFSave.js';
 import { handleUserAction } from '../content/handlers/interceptorHandlers/handleUserAction.js';
 
-export class MessageRouter{
-    static handleMessage(message, sender, sendResponse){
-        switch(message.type){
+export default class MessageRouter {
+    static async handleMessage(message, sender, sendResponse) {
+        console.log("Message received in MessageRouter:", message);
+        
+        switch(message.type) {
             case 'INTERCEPT_PDF':
+                console.log("Handling INTERCEPT_PDF message...");
                 return handlePDFIntercept(message, sender, sendResponse);
-            case 'SAVE_PDF':
-                return handlePDFSave(message.payload);
             case 'USER_ACTION':
+                console.log("Handling USER_ACTION message...");
                 return handleUserAction(message.payload);
+            case 'SAVE_PDF':
+                console.log("Handling SAVE_PDF message...");
+                return handlePDFSave(message.payload);
             default:
-                return {action : "NO_ACTION"};
+                console.log("No handler for message type:", message.type);
+                return { action: "NO_ACTION" };
         }
     }
 }

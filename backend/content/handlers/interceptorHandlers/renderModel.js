@@ -1,5 +1,7 @@
-export default async function renderModel(file, inputElement){
-    const modalPath = chrome.runtime.getUrl('../../../frontend/model.html');
+export async function renderModel(file, inputElement) {
+    console.log("renderModel called with file:", file);
+    // Basic implementation for now
+    const modalPath = chrome.runtime.getUrl('../../frontend/components/model.html');
     const modal = await fetch(modalPath).then(res => res.text());
 
     const container = document.createElement('div');

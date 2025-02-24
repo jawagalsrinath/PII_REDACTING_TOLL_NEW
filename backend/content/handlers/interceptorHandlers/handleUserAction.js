@@ -2,7 +2,7 @@ import { handleSavePDF } from './handleSavePDF';
 
 export default async function handleUserAction(payload){
     try{
-        
+        console.log('User Action Payload : ', payload);
         // validating user action 
         if(!['ALLOW', 'DENY'].includes(payload?.action)){
             throw new Error('Invalid user action type');
@@ -21,6 +21,7 @@ export default async function handleUserAction(payload){
                     filename : payload.filename
                 });
 
+                console.log('Save Results : ', saveResults);
                 return { 
                 action : 'SAVE_RESULT',
                 ...saveResults,
