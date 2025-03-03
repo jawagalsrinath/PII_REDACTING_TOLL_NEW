@@ -1,5 +1,7 @@
 console.log("Content script injected!");
 
+
+// <=================  render Model =====================>
 async function renderModel(file, inputElement) {
     console.log("renderModel called with file:", file);
     try {
@@ -48,21 +50,31 @@ async function renderModel(file, inputElement) {
         const denyBtn = modalContainer.querySelector('.deny-btn');
         
         if (allowBtn) {
-            allowBtn.addEventListener('click', () => {
-                console.log('Allow button clicked for file : ', file.name);
-                chrome.runtime.sendMessage({
-                    type: 'USER_ACTION',
-                    payload: {
-                        action: 'ALLOW',
-                        filename: file.name,
-                        file: file
-                    }
-                }, (response) => {
-                        console.log('Response from background script allow:', response);
-                });
+            allowBtn.addEventListener('click', async () => {
+                console.log('Allow button clicked for file:', file.name);
+        
+                try {
+                    const fileReader = new FileReader();
+                    fileReader.readAsDataURL(file);
+                    fileReader.onload = function () {
+                        chrome.runtime.sendMessage({
+                            type: 'USER_ACTION',
+                            payload: {
+                                action: 'ALLOW',
+                                filename: file.name,
+                                dataUrl: fileReader.result // Data URL
+                            }
+                        }, (response) => {
+                            console.log('Response from background script allow:', response);
+                        });
+                    };
+                } catch (error) {
+                    console.error("Error converting file to Data URL:", error);
+                }
+        
                 modalContainer.remove();
             });
-        }
+        }        
         
         if (denyBtn) {
             denyBtn.addEventListener('click', () => {
@@ -88,6 +100,9 @@ async function renderModel(file, inputElement) {
     }
 }
 
+
+
+// <=================  PDF Interceptor Class =====================>
 class PDFInterceptor {
     constructor() { 
         this.initFileInputMonitoring();
@@ -166,6 +181,7 @@ class PDFInterceptor {
     }
 }
 
-// Initialize the interceptor
+
+// <=================  PDF Interceptor Instance =====================>
 new PDFInterceptor();
 
