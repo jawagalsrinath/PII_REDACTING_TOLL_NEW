@@ -1,7 +1,13 @@
+/* 
+    PDFModel is a custom element that manipulates the HTML template to display a modal dialog box, 
+    when ever PDF file uplaoding if found.
+*/
+
+
 class PDFModal extends HTMLElement {
     constructor(){
         super();
-        this.attachShadow({mode: 'open'});
+        this.attachShadow({mode: 'open'}); // shadow dom , works on top of the existing dom .
 
         fetch(chrome.runtime.getURL('frontend/components/model.html'))
             .then(response => response.text())
@@ -20,6 +26,7 @@ class PDFModal extends HTMLElement {
     }
 
     render(){
+        // manipulating template with refrences to the shadow dom
         const headerSlot = this.shadowRoot.quesrySelector('[name="header"]');
         const bodySlot = this.shadowRoot.querySelector('[name="body"]');
 

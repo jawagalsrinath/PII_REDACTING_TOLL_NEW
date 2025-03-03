@@ -6,7 +6,7 @@ async function renderModel(file, inputElement) {
     console.log("renderModel called with file:", file);
     try {
         // 1. Load the template
-        const modalUrl = chrome.runtime.getURL('frontend/components/model.html');
+        const modalUrl = chrome.runtime.getURL('frontend/components/model.html'); // Load HTML file
         console.log("Modal URL:", modalUrl);
         const modalResponse = await fetch(modalUrl);
         const modalText = await modalResponse.text();
@@ -17,7 +17,7 @@ async function renderModel(file, inputElement) {
         container.innerHTML = modalText;
         
         // 3. Get the template content
-        const template = container.querySelector('#pdf-modal-template');
+        const template = container.querySelector('#pdf-modal-template'); // Get the template
         if (!template) {
             throw new Error("Modal template not found");
         }
@@ -33,7 +33,7 @@ async function renderModel(file, inputElement) {
         // 6. Add styles
         const style = document.createElement('link');
         style.rel = 'stylesheet';
-        style.href = chrome.runtime.getURL('frontend/styles/model.css');
+        style.href = chrome.runtime.getURL('frontend/styles/model.css'); // Load CSS file
         document.head.appendChild(style);
         
         // 7. Add to document
@@ -54,6 +54,10 @@ async function renderModel(file, inputElement) {
                 console.log('Allow button clicked for file:', file.name);
         
                 try {
+                    /*
+                        FileReader : This is an object for reading files asynchronously, in many formates like data , dataURL, binary etc..,.
+                        readAsDataURL :  Reads the contents of a file as a data URL , useful for downloading data in extension. 
+                    */ 
                     const fileReader = new FileReader();
                     fileReader.readAsDataURL(file);
                     fileReader.onload = function () {

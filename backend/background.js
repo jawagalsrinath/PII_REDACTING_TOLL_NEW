@@ -2,6 +2,12 @@ console.log("Background service worker initializing...");
 
 
 // <=================  Message Router =====================>
+
+/* Message Router : it routes, handles the message from the content script "interceptor.js" with the help of handlers 
+        - handleInterceptPDF : checks the policies and decides whether to proceed with the file or not.
+        - handleUserAction : handles the user action on the file , either to save or cancel the file.
+        - handleSavePDF : saves the file in the downloads folder.
+*/
 const MessageRouter = {
     async handleMessage(message, sender) {
         console.log("Message received in MessageRouter:", message);
@@ -72,6 +78,7 @@ async function handlePDFIntercept(payload){
 
 
 // <=================  pdf file saving =====================> 
+
 async function handleSavePDF(payload){
 
     try{
@@ -86,7 +93,7 @@ async function handleSavePDF(payload){
                 {
                     url : payload.dataUrl,
                     filename : payload.filename,
-                    conflictAction: 'uniquify', 
+                    conflictAction: 'uniquify', // saving pdf file with unique name if already exists
                     saveAs : false
                 },
         
@@ -125,6 +132,7 @@ async function handleSavePDF(payload){
 async function handleUserAction(payload){
     try{
         console.log('User Action Payload : ', payload);
+        
         // validating user action 
         if(!['ALLOW', 'DENY'].includes(payload?.action)){
             throw new Error('Invalid user action type');
@@ -146,7 +154,7 @@ async function handleUserAction(payload){
                 console.log('Save Results : ', saveResults);
                 return { 
                 action : 'SAVE_RESULT',
-                ...saveResults,
+                ...saveResults, // binds the saveResults object to the return object 
                 timestamp : Date.now()
                 }
 
