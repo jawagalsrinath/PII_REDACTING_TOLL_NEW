@@ -1,6 +1,19 @@
 console.log("Content script injected!");
 
 
+function getPiiCheckboxes() {
+    return `
+        <div class="pii-section">
+            <p>Select PII to redact:</p>
+            <label><input type="checkbox" name="pii" value="name"> Name</label><br>
+            <label><input type="checkbox" name="pii" value="address"> Address</label><br>
+            <label><input type="checkbox" name="pii" value="number"> Number</label><br>
+            <label><input type="checkbox" name="pii" value="id"> ID Number</label><br>
+            <button class="redact-btn">Redact PDF</button>
+        </div>
+    `;
+}
+
 // <=================  render Model =====================>
 async function renderModel(file, inputElement) {
     console.log("renderModel called with file:", file);
@@ -48,37 +61,91 @@ async function renderModel(file, inputElement) {
         // 9. Add event listeners
         const allowBtn = modalContainer.querySelector('.allow-btn');
         const denyBtn = modalContainer.querySelector('.deny-btn');
+        const modalBody = modalContainer.querySelector('.modal-body');
         
         if (allowBtn) {
             allowBtn.addEventListener('click', async () => {
                 console.log('Allow button clicked for file:', file.name);
+                console.log('modal body html : ' , modalBody.innerHTML);
+                modalBody.innerHTML = `<p> Scanning ${file.name}, please wait... </p>`;
+                allowBtn.disabled = true;
+                denyBtn.disabled = true;
         
                 try {
-                    /*
-                        FileReader : This is an object for reading files asynchronously, in many formates like data , dataURL, binary etc..,.
-                        readAsDataURL :  Reads the contents of a file as a data URL , useful for downloading data in extension. 
-                    */ 
                     const fileReader = new FileReader();
                     fileReader.readAsDataURL(file);
-                    fileReader.onload = function () {
-                        chrome.runtime.sendMessage({
-                            type: 'USER_ACTION',
-                            payload: {
-                                action: 'ALLOW',
-                                filename: file.name,
-                                dataUrl: fileReader.result // Data URL
-                            }
-                        }, (response) => {
-                            console.log('Response from background script allow:', response);
+                    fileReader.onload = async () => {
+                        const dataUrl = fileReader.result;
+                        const response = await new Promise(resolve => {
+                            chrome.runtime.sendMessage({
+                                type: 'USER_ACTION',
+                                payload: {
+                                    action: 'SCAN_PDF',
+                                    filename: file.name,
+                                    dataUrl: dataUrl
+                                }
+                            }, resolve);
                         });
+
+                        console.log('Scan Response for : ', file.name, " response : ", response);
+                        if (response.action === 'BLOCK') {
+                            modalBody.innerHTML = `<p> Malicious content detected in ${file.name}, file blocked </p>`;
+                            modalContainer.querySelector('.modal-footer').remove();
+                            setTimeout(() => { modalContainer.remove() }, 3000);
+                        } else if (response.action === 'SHOW_PII') {
+                            modalBody.innerHTML = `
+                                <p style="color: green;">PDF is safe!</p>
+                                ${getPiiCheckboxes()}
+                            `;
+                            modalContainer.querySelector('.modal-footer').remove();
+
+                            // Add redact button listener
+                            const redactBtn = modalContainer.querySelector('.redact-btn');
+                            redactBtn.addEventListener('click', async () => {
+                                const checkboxes = modalContainer.querySelectorAll('input[name="pii"]:checked');
+                                const piiToRedact = Array.from(checkboxes).map(cb => cb.value);
+                                if (piiToRedact.length === 0) {
+                                    alert('Select at least one PII to redact');
+                                    return;
+                                }
+
+                                const redactResponse = await new Promise(resolve => {
+                                    chrome.runtime.sendMessage({
+                                        type: 'USER_ACTION',
+                                        payload: {
+                                            action: 'REDACT_PDF',
+                                            filename: file.name,
+                                            dataUrl: dataUrl,
+                                            piiToRedact: piiToRedact
+                                        }
+                                    }, resolve);
+                                });
+
+                                console.log('Redact Response : ', redactResponse);
+                                if (redactResponse.success) {
+                                    // Keep PII visible post-redaction
+                                    const piiSection = modalContainer.querySelector('.pii-section');
+                                    piiSection.querySelectorAll('input[name="pii"]').forEach(input => input.disabled = true);
+                                    piiSection.querySelector('.redact-btn').remove();
+                                    modalBody.innerHTML = `
+                                        <p style="color: green;">Redaction complete on PII: ${piiToRedact.join(', ')}</p>
+                                        <button class="close-btn">Close</button>
+                                    `;
+
+                                    modalContainer.querySelector('.close-btn').addEventListener('click', () => {
+                                        modalContainer.remove();
+                                    });
+                                } else {
+                                    modalBody.innerHTML = `<p style="color: red;">Error redacting PII: ${redactResponse.message}</p>`;
+                                }
+                            }, { once: true }); // Single-use listener
+                        }
                     };
                 } catch (error) {
                     console.error("Error converting file to Data URL:", error);
                 }
-        
-                modalContainer.remove();
-            });
-        }        
+            }, { once: true }); // Single-use listener
+        }
         
         if (denyBtn) {
             denyBtn.addEventListener('click', () => {

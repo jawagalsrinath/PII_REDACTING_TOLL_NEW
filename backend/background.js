@@ -1,5 +1,5 @@
 console.log("Background service worker initializing...");
-
+const SERVER_URL = 'http://localhost:3000';
 
 // <=================  Message Router =====================>
 
@@ -134,7 +134,7 @@ async function handleUserAction(payload){
         console.log('User Action Payload : ', payload);
         
         // validating user action 
-        if(!['ALLOW', 'DENY'].includes(payload?.action)){
+        if(!['ALLOW', 'DENY', 'SCAN_PDF', 'REDACT_PDF'].includes(payload?.action)){
             throw new Error('Invalid user action type');
         }
 
@@ -142,14 +142,9 @@ async function handleUserAction(payload){
         switch(payload.action){
 
             case 'ALLOW':
-                if(!payload.dataUrl || !payload.filename) {
-                    throw new Error('Missing file data for ALLOW action');
-                }
+                if(!payload.dataUrl || !payload.filename) throw new Error('Missing file data for ALLOW action');
 
-                const saveResults =  await handleSavePDF({
-                    dataUrl : payload.dataUrl,
-                    filename : payload.filename
-                });
+                const saveResults =  await handleSavePDF({ dataUrl : payload.dataUrl, filename : payload.filename });
 
                 console.log('Save Results : ', saveResults);
                 return { 
@@ -160,11 +155,16 @@ async function handleUserAction(payload){
 
 
             case 'DENY':
-                return {
-                    action : 'SAVE_CANCELLED',
-                    filename : payload.filename,
-                    timestamp : Date.now()
-                }
+                return { action : 'SAVE_CANCELLED', filename : payload.filename, timestamp : Date.now() }
+            
+            case 'SCAN_PDF':
+                const scanResult = await scanPDF(payload.dataUrl, payload.filename);
+                if(scanResult && scanResult.total_detected_avs > 0) return { action : 'BLOCK' , reason : "MALWARE_DETECTED"};
+                else return { action : 'SHOW_PII', filename : payload.filename , dataUrl : payload.dataUrl};
+            
+            case 'REDACT_PDF':
+                const redactResult = await redactPDF(payload.dataUrl, payload.filename , payload.piiToRedact);
+                return { action : 'REDACT_RESULT' , ...redactResult, timestamp : Date.now()};
 
             default:
                     throw new Error('Unhandeled user action type');
@@ -182,7 +182,53 @@ async function handleUserAction(payload){
     }
 }   
 
+// <=================  pdf scanning =====================>
+async function scanPDF(dataUrl, filename) {
+    try {
+        console.log('Scanning PDF : ', filename);
+        const response = await fetch(`${SERVER_URL}/api/scan-file`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataUrl })
+        });
 
+        const text = await response.text();
+        // console.log(`Server response for ${filename}:`, { status: response.status, data: text });
+        const scanData = JSON.parse(text);
+        if (!response.ok) throw new Error(scanData.error || `Failed to scan PDF (Status: ${response.status})`);
+        const scanId = scanData.dataId;
+        // console.log('PDF Scan Successful on file : ', filename, " \n Scan ID : ", scanId);
+
+        let report;
+        for (let i = 0; i < 5; i++) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const reportResponse = await fetch(`${SERVER_URL}/api/get-report/${scanId}`);
+            report = await reportResponse.json();
+            console.log(`Attempt ${i + 1} - Report for ${filename}:`, report);
+            if (!reportResponse.ok) throw new Error(report.error || 'Failed to get scan report');
+            if (report.scan_results.progress_percentage == 100) break;
+        }
+
+        console.log(`${filename} Scan Report : `, report);
+        return report.scan_results;
+    } catch (error) {
+        console.error(`Error scanning PDF file => : ${filename}`, error.message);
+        return null;
+    }
+}
+
+
+// <=================  pdf redaction =====================>
+async function redactPDF(dataUrl, filename, piiTpoRedact){
+    try{
+        console.log('Redacting PDF : ', filename , ' PII : ', piiTpoRedact);
+        const response = await handleSavePDF({dataUrl, filename});
+        return { success : true, ...response};
+    }
+    catch(error){
+        return { success : false, message : error.message, filename};
+    }
+}
 
 
 // <================= check policies =====================>
