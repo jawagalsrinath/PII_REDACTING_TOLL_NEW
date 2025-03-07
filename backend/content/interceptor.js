@@ -68,8 +68,8 @@ async function renderModel(file, inputElement) {
                 console.log('Allow button clicked for file:', file.name);
                 console.log('modal body html : ' , modalBody.innerHTML);
                 modalBody.innerHTML = `<p> Scanning ${file.name}, please wait... </p>`;
-                allowBtn.disabled = true;
-                denyBtn.disabled = true;
+                modalContainer.querySelector('.deny-btn').remove();
+                modalContainer.querySelector('.allow-btn').remove();
         
                 try {
                     const fileReader = new FileReader();

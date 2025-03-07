@@ -192,9 +192,14 @@ async function scanPDF(dataUrl, filename) {
             body: JSON.stringify({ dataUrl })
         });
 
-        const text = await response.text();
-        // console.log(`Server response for ${filename}:`, { status: response.status, data: text });
-        const scanData = JSON.parse(text);
+        /* In case of response is error in HTML formate from the server , then resposne.json() might casue error , so we using this response.text() -> console.log() -> parse to json 
+
+            const text = await response.text();
+            console.log(`Server response for ${filename}:`, { status: response.status, data: text });
+            const scanData = JSON.parse(text);
+        */
+        
+        const scanData =await response.json();
         if (!response.ok) throw new Error(scanData.error || `Failed to scan PDF (Status: ${response.status})`);
         const scanId = scanData.dataId;
         // console.log('PDF Scan Successful on file : ', filename, " \n Scan ID : ", scanId);
