@@ -4,6 +4,6 @@ const { scanFileInput, getReportInput } = require('../handler/scanningHandlers')
 
 
 router.post('/scan-file' , scanFileInput);
-router.get('get-report/:dataId', getReportInput);
+router.get('/get-report/:scanId', getReportInput);
 
 module.exports = router;

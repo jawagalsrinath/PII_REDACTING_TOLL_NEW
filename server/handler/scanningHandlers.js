@@ -1,8 +1,8 @@
 const express = require('express');
 const { scanFile, getReport } = require('../handler/malwareScanning');
-const router = express.Router();
 
-router.post('/scan-file', async (req, res) => {
+
+const scanFileInput = async (req, res) => {
     const {dataUrl } = req.body;
 
     if(!dataUrl || !dataUrl.startsWith('data:application/pdf;base64,')) {
@@ -19,9 +19,9 @@ router.post('/scan-file', async (req, res) => {
     catch(error){
         return res.status(500).json({ message : error.message});
     }
-});
+}
 
-router.get('/get-report/:scanId', async (req, res) => {
+const getReportInput = async (req, res) => {
     // console.log('Received /get-report request for scanId:', req.params.scanId);
     try{
         const result = await getReport(req.params.scanId);
@@ -30,6 +30,6 @@ router.get('/get-report/:scanId', async (req, res) => {
     catch(error){
         res.status(500).json({message : error.message})
     }
-});
+}
 
-module.exports = router;
+module.exports = { scanFileInput, getReportInput };
