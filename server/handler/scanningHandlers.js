@@ -1,5 +1,5 @@
 const express = require('express');
-const { scanFile, getReport } = require('../handler/malwareScanning');
+const { scanFile, getReport } = require('../controller/malwareScanning');
 
 
 const scanFileInput = async (req, res) => {
