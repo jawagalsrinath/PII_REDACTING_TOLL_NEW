@@ -62,3 +62,5 @@ public/
 
 # TernJS port file
 .tern-port
+
+venv/
