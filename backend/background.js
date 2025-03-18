@@ -1,7 +1,8 @@
 console.log("Background service worker initializing...");
 const SERVER_URL = 'http://localhost:3000';
+const AUTH_TOKEN = 'zax12qs98cwdv65efbrgnt34hmyj56ukil7p'; // this is the token that the server will use to authenticate the extension
 
-// <=================  Message Router =====================>
+// <=================  Message Router =====================>e
 
 /* Message Router : it routes, handles the message from the content script "interceptor.js" with the help of handlers 
         - handleInterceptPDF : checks the policies and decides whether to proceed with the file or not.
@@ -78,12 +79,12 @@ async function handlePDFIntercept(payload){
 
 
 // <=================  pdf file saving =====================> 
-
 async function handleSavePDF(payload){
 
     try{
         
         if(!payload.dataUrl || !payload.filename){
+            console.log('Invalid payload for saving PDF url : ', payload.dataUrl, "filenmae : ", payload.filename);
             throw new Error("Invalid payload for saving PDF");
         }
 
@@ -188,7 +189,7 @@ async function scanPDF(dataUrl, filename) {
         console.log('Scanning PDF : ', filename);
         const response = await fetch(`${SERVER_URL}/api/scan-file`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json' , 'X-Auth-Token' : AUTH_TOKEN},
             body: JSON.stringify({ dataUrl })
         });
 
@@ -207,7 +208,9 @@ async function scanPDF(dataUrl, filename) {
         let report;
         for (let i = 0; i < 5; i++) {
             await new Promise(resolve => setTimeout(resolve, 2000));
-            const reportResponse = await fetch(`${SERVER_URL}/api/get-report/${scanId}`);
+            const reportResponse = await fetch(`${SERVER_URL}/api/get-report/${scanId}`,
+                { headers: { 'X-Auth-Token': AUTH_TOKEN } }
+            );
             report = await reportResponse.json();
             console.log(`Attempt ${i + 1} - Report for ${filename}:`, report);
             if (!reportResponse.ok) throw new Error(report.error || 'Failed to get scan report');
@@ -217,21 +220,40 @@ async function scanPDF(dataUrl, filename) {
         console.log(`${filename} Scan Report : `, report);
         return report.scan_results;
     } catch (error) {
-        console.error(`Error scanning PDF file => : ${filename}`, error.message);
+        console.error(`Error scanning PDF file => : ${filename}`, error.message); 
         return null;
     }
 }
 
 
 // <=================  pdf redaction =====================>
-async function redactPDF(dataUrl, filename, piiTpoRedact){
-    try{
-        console.log('Redacting PDF : ', filename , ' PII : ', piiTpoRedact);
-        const response = await handleSavePDF({dataUrl, filename});
-        return { success : true, ...response};
-    }
-    catch(error){
-        return { success : false, message : error.message, filename};
+async function redactPDF(dataUrl, filename, piiToRedact) {
+    try {
+        console.log('Starting redactPDF with dataUrl:', dataUrl.slice(0, 50)); // Check input
+        const images = await generateImages(dataUrl);
+        console.log('Generated images:', images.length); // Verify array
+        const piiResults = [];
+        for (const [index, image] of images.entries()) {
+            console.log('Processing image', index + 1);
+            const pii = await detectPIIFromImages(image);
+            console.log('PII for page', index + 1, ':', pii);
+            piiResults.push({ page: index + 1, pii });
+        }
+        console.log('Detected PII:', piiResults, 'PII want to redact:', piiToRedact);
+
+        const redactDataUrl  = await redactPdfOnServer(dataUrl, piiResults);
+        console.log('Redacted PDF data url : ', redactDataUrl);
+        return {
+            success : true,
+            redactDataUrl : redactDataUrl
+        };
+    } catch (error) {
+        console.error('Error in redactPDF:', error); // Log full error object
+        return {
+            action : 'ERROR',
+            message : error.message,
+            timestamp : Date.now()
+        }// Bubble up with details
     }
 }
 
@@ -259,6 +281,104 @@ async function checkPoilicies(payload){
 }
 
 
+// <================= generate Images =====================>
+async function generateImages(dataUrl){
+    const response = await fetch(`${SERVER_URL}/api/generate-images`, {
+        method : 'POST',
+        headers : { 'Content-Type' : 'application/json' , 'X-Auth-Token' : AUTH_TOKEN},
+        body : JSON.stringify({dataUrl})
+    });
 
+    if(!response.ok) throw new Error("Error in image generation");
+    const { images } = await response.json();
+    return images;
+}
+
+
+// <================= detecting PII from Images =====================>
+async function detectPIIFromImages(imageDataUrl){
+    try {
+        const text  =  await extractTextFromImages(imageDataUrl);
+        console.log('Text Extracted from image in detectPII : ', text);
+        // if(text.length() == 0) throw new Error('No text extracted from image');
+        const response  = await fetch(`${SERVER_URL}/api/detect-pii`, {
+            method : 'POST',
+            headers : { 'Content-Type' : 'application/json' , 'X-Auth-Token' : AUTH_TOKEN},
+            body : JSON.stringify({text})
+        });
+    
+        if(!response.ok){
+            console.log('Detect PII response give error :', response);
+            throw new Error('Error in fetching PII from images');
+        }
+        const pii =  await response.json();
+        console.log('PII Detected (testing ): ', pii);
+        return pii;
+    }
+    catch(error){
+        console.error('Error in detecting PII from images : ', error.message);
+        throw new Error(`Error in detecting PII from images : ${error.message}`);
+    }
+}
+
+
+// <================= Extracting text using OCR =====================>
+async function extractTextFromImages(imageDataUrl){
+    try{
+        if(!imageDataUrl || !imageDataUrl.startsWith('data:image/png;base64,')) throw new Error('Invalid imageDataUrl');
+        const response  = await fetch(`${SERVER_URL}/api/extract-text`,{
+            method : 'POST',
+            headers : { 'Content-Type' : 'application/json' , 'X-Auth-Token' : AUTH_TOKEN},
+            body : JSON.stringify({imageDataUrl})
+        });
+
+        if(!response.ok){
+            console.log('Error in extracting text from images : ' , response);
+            throw new Error('Error in extracting text from images');
+        }
+
+        const { text } = await response.json();
+        return text;
+    }
+    catch(error){
+        console.error('Error in extracting text from images : ', error.message);
+        throw new Error(`Error in extracting text from images : ${error.message}`);
+    }
+}
+
+
+// <================= Redacting PDF on the server =====================>
+async function redactPdfOnServer(dataUrl, piiResults){
+    try{
+        if(!dataUrl || !dataUrl.startsWith('data:application/pdf;base64,')){
+            throw new Error('Invalid dataUrl format');
+        }
+
+        if (!Array.isArray(piiResults)) {
+            throw new Error('piiResults must be an array');
+        }
+
+        const response = await fetch(`${SERVER_URL}/api/redact_Pdf_With_PII`, {
+            method : 'POST',
+            headers : { 'Content-Type' : 'application/json', 'X-Auth-Token' : AUTH_TOKEN },
+            body : JSON.stringify({dataUrl, piiResults})
+        });
+
+        if(!response.ok){
+            console.log('Error in Redacting pdf with PII : ', response);
+            throw new Error('Error in Redacting PDF with PII ')
+        }
+
+        const data = await response.json();
+        const redactPdfUrl = data.redactedPDFUrl; // Extract the string directly
+        console.log('Redacted PDF Url from server:', redactPdfUrl.slice(0, 50));
+        return redactPdfUrl;
+    }
+
+    catch(error){
+        console.log('Error in redacting Pdf with PII in service (redactPdfOnServer) : ', error.message);
+        throw new Error('Error in redacting Pdf with PII in service (redactPdfOnServer) : ', error.message);
+    }
+}
 
 console.log("Background service worker initialized successfully");

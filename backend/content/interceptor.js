@@ -123,20 +123,50 @@ async function renderModel(file, inputElement) {
 
                                 console.log('Redact Response : ', redactResponse);
                                 if (redactResponse.success) {
+                                    const redactDataUrl = redactResponse.redactDataUrl;
                                     // Keep PII visible post-redaction
                                     const piiSection = modalContainer.querySelector('.pii-section');
                                     piiSection.querySelectorAll('input[name="pii"]').forEach(input => input.disabled = true);
-                                    piiSection.querySelector('.redact-btn').remove();
+                                    piiSection.querySelector('.redact-btn')?.remove(); // Safe removal
                                     modalBody.innerHTML = `
                                         <p style="color: green;">Redaction complete on PII: ${piiToRedact.join(', ')}</p>
                                         <button class="close-btn">Close</button>
                                     `;
-
+                                
+                                    try {
+                                        const savePDF = await new Promise((resolve, reject) => {
+                                            chrome.runtime.sendMessage(
+                                                {
+                                                    type: 'SAVE_PDF',
+                                                    payload: {
+                                                        filename: file.name,
+                                                        dataUrl: redactDataUrl,
+                                                    },
+                                                },
+                                                (response) => {
+                                                    if (response && response.success) {
+                                                        resolve(response);
+                                                    } else {
+                                                        reject(new Error(response?.message || 'Failed to save PDF'));
+                                                    }
+                                                }
+                                            );
+                                        });
+                                
+                                        console.log('Save PDF result:', savePDF); // Log the response for debugging
+                                    } catch (error) {
+                                        console.error('Error saving PDF:', error.message);
+                                        modalBody.innerHTML = `
+                                            <p style="color: red;">Redaction complete, but save failed: ${error.message}</p>
+                                            <button class="close-btn">Close</button>
+                                        `;
+                                    }
+                                
                                     modalContainer.querySelector('.close-btn').addEventListener('click', () => {
                                         modalContainer.remove();
                                     });
                                 } else {
-                                    modalBody.innerHTML = `<p style="color: red;">Error redacting PII: ${redactResponse.message}</p>`;
+                                    modalBody.innerHTML = `<p style="color: red;">Error redacting PII: ${redactResponse.message || 'Unknown error'}</p>`;
                                 }
                             }, { once: true }); // Single-use listener
                         }
