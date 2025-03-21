@@ -2,8 +2,9 @@ import json
 import sys
 import base64
 import fitz  # PyMuPDF
+sys.stdout.reconfigure(line_buffering=True)
 
-def redact_pdf(pdf_base64, pii_data):
+def redact_pdf(pdf_base64, pii_data, pii_data_to_redact):
     try:
         # Decode the base64 PDF data
         pdf_bytes = base64.b64decode(pdf_base64)
@@ -28,17 +29,26 @@ def redact_pdf(pdf_base64, pii_data):
                 continue  # Skip invalid page numbers
 
             page = pdf[page_num]
-            for pii in page_data['pii']:
+
+            for pii in page_data['pii']['pii']:
+
                 # Validate pii structure
                 if not isinstance(pii, dict) or 'value' not in pii:
                     continue
 
+                #print(f"PII Entry: ", pii.get('value'))
                 text = pii['value']
+                type = pii['type']
+
+                if type not in pii_data_to_redact:
+                     continue
+
                 if not text or len(text) < 2:
                     continue  # Skip empty or invalid text
 
                 # Search for the text and redact
                 instances = page.search_for(text)
+
                 for inst in instances:
                     page.draw_rect(inst, color=(0, 0, 0), fill=(0, 0, 0))
                     page.add_redact_annot(inst)
@@ -67,18 +77,23 @@ if __name__ == "__main__":
         # Extract PDF and PII data
         pdf_base64 = data['pdfBase64']
         pii_json_str = data['piiJson']  # This is a JSON string
+        pii_json_to_redact_str = data['piiToRedactJson']  # This is a JSON string
 
         # Validate inputs
         if not pdf_base64:
             raise ValueError("Missing pdfBase64")
         if not pii_json_str:
             raise ValueError("Missing piiJson")
+        if not pii_json_to_redact_str:
+             raise ValueError("Missing piiJsonToRedact")
 
         # Parse the piiJson string into a Python object (list of dicts)
         pii_data = json.loads(pii_json_str)
 
+        # Parse the piiJsonToRedact string into a Python object (list of dicts)
+        pii_data_to_redact = json.loads(pii_json_to_redact_str)
         # Redact the PDF in memory
-        redacted_base64 = redact_pdf(pdf_base64, pii_data)
+        redacted_base64 = redact_pdf(pdf_base64, pii_data, pii_data_to_redact)
 
         # Output the result as JSON to stdout
         output = {"redactedBase64": redacted_base64}

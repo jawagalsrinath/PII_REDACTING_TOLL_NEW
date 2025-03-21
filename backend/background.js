@@ -241,7 +241,7 @@ async function redactPDF(dataUrl, filename, piiToRedact) {
         }
         console.log('Detected PII:', piiResults, 'PII want to redact:', piiToRedact);
 
-        const redactDataUrl  = await redactPdfOnServer(dataUrl, piiResults);
+        const redactDataUrl  = await redactPdfOnServer(dataUrl, piiResults, piiToRedact);
         console.log('Redacted PDF data url : ', redactDataUrl);
         return {
             success : true,
@@ -348,7 +348,7 @@ async function extractTextFromImages(imageDataUrl){
 
 
 // <================= Redacting PDF on the server =====================>
-async function redactPdfOnServer(dataUrl, piiResults){
+async function redactPdfOnServer(dataUrl, piiResults, piiToRedact){
     try{
         if(!dataUrl || !dataUrl.startsWith('data:application/pdf;base64,')){
             throw new Error('Invalid dataUrl format');
@@ -361,7 +361,7 @@ async function redactPdfOnServer(dataUrl, piiResults){
         const response = await fetch(`${SERVER_URL}/api/redact_Pdf_With_PII`, {
             method : 'POST',
             headers : { 'Content-Type' : 'application/json', 'X-Auth-Token' : AUTH_TOKEN },
-            body : JSON.stringify({dataUrl, piiResults})
+            body : JSON.stringify({dataUrl, piiResults, piiToRedact})
         });
 
         if(!response.ok){

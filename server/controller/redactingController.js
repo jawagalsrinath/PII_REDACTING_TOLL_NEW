@@ -1,7 +1,8 @@
 const { spawn } = require('child_process');
 const path = require('path');
+const fs = require('fs').promises;
 
-async function redactPdfWithPII(dataUrl, piiResults) {
+async function redactPdfWithPII(dataUrl, piiResults, piiToRedact) {
     return new Promise((resolve, reject) => {
         try {
             // Validate input
@@ -12,12 +13,16 @@ async function redactPdfWithPII(dataUrl, piiResults) {
                 throw new Error('piiResults must be an array');
             }
 
+            if (!Array.isArray(piiToRedact)) { 
+                throw new Error('piiToRedact must contain only strings');
+            }
+
             // Extract the base64 PDF data
             const pdfBase64 = dataUrl.split(',')[1];
             const piiJson = JSON.stringify(piiResults);
-
+            const piiToRedactJson = JSON.stringify(piiToRedact);
             // Prepare the input data as JSON
-            const inputData = JSON.stringify({ pdfBase64, piiJson });
+            const inputData = JSON.stringify({ pdfBase64, piiJson, piiToRedactJson});
             console.log('Input data size:', inputData.length);
 
             // Define absolute paths to redact.py and the virtual environment's Python
@@ -60,6 +65,7 @@ async function redactPdfWithPII(dataUrl, piiResults) {
 
                     const redactedDataUrl = `data:application/pdf;base64,${output.redactedBase64}`;
                     console.log('Redacted PDF dataUrl:', redactedDataUrl.slice(0, 50));
+
                     resolve(redactedDataUrl);
                 } catch (parseError) {
                     console.error('Error parsing Python script output:', parseError);
